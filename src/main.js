@@ -48,10 +48,84 @@ const modules = [
 let currentScreen = 'dashboard'
 let listeningScore = null
 let selectedAnswers = [null, null, null]
+let isDarkMode = localStorage.getItem('langLab_theme') === 'dark'
+if (isDarkMode) document.body.classList.add('dark-theme')
 
-// Global state for live simulation
+// Persisted User Stats
+const defaultStats = {
+  xp: 1250,
+  streak: 5,
+  lessons: 14,
+  time: '2h 15m',
+  avgScore: 850
+}
+let userStats = JSON.parse(localStorage.getItem('langLab_stats')) || defaultStats
+
+function saveStats() {
+  localStorage.setItem('langLab_stats', JSON.stringify(userStats))
+}
+
+function animateValue(obj, start, end, duration) {
+  let startTimestamp = null;
+  const step = (timestamp) => {
+    if (!startTimestamp) startTimestamp = timestamp;
+    const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+    obj.innerHTML = Math.floor(progress * (end - start) + start);
+    if (progress < 1) {
+      window.requestAnimationFrame(step);
+    }
+  };
+  window.requestAnimationFrame(step);
+}
+
+window.toggleTheme = () => {
+  isDarkMode = !isDarkMode
+  localStorage.setItem('langLab_theme', isDarkMode ? 'dark' : 'light')
+  document.body.classList.toggle('dark-theme', isDarkMode)
+  render()
+}
+
+window.showToast = (title, msg, type = 'success') => {
+  const container = document.getElementById('toast-container');
+  const tTitle = document.getElementById('toast-title');
+  const tMsg = document.getElementById('toast-msg');
+  const tIcon = document.getElementById('toast-icon');
+  const tIconBg = document.getElementById('toast-icon-bg');
+  
+  if (!container) return;
+  
+  tTitle.innerText = title;
+  tMsg.innerText = msg;
+  
+  if (type === 'success') {
+    tIconBg.style.background = 'rgba(34, 197, 94, 0.1)';
+    tIconBg.style.color = '#22c55e';
+    tIcon.setAttribute('data-lucide', 'check');
+  } else {
+    tIconBg.style.background = 'rgba(59, 130, 246, 0.1)';
+    tIconBg.style.color = '#3b82f6';
+    tIcon.setAttribute('data-lucide', 'info');
+  }
+  
+  lucide.createIcons();
+  container.classList.add('show');
+  
+  setTimeout(() => {
+    container.classList.remove('show');
+  }, 3000);
+}
+
+function addXP(amount) {
+  userStats.xp += amount
+  saveStats()
+  window.showToast('XP Earned!', `You gained +${amount} XP points.`);
+  render()
+}
 let isDiscussionRunning = false;
 let discussionTopicIndex = 1; // Default to Environment & Climate
+let speakingFeedback = null;
+let dialogueFeedback = null;
+
 let mockDiscussionMessages = [
   { sender: 'Alex', text: 'I think AI will definitely transform education by providing personalized learning paths for every student.', time: '10:02 AM', color: '#818cf8' },
   { sender: 'Sarah', text: 'True, but we must also consider the digital divide. Not all students have equal access to this technology.', time: '10:05 AM', color: '#fb7185' },
@@ -105,6 +179,39 @@ function render() {
           <div class="sidebar-item ${currentScreen === 'progress' ? 'active' : ''}" onclick="navigateTo('progress')">
              <i data-lucide="bar-chart-2"></i> Progress
           </div>
+          
+          <div style="margin-top: auto; padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+             <!-- Level Progress -->
+             <div style="background: var(--surface); border: 1px solid var(--glass-border); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                   <span style="font-size: 11px; font-weight: 800; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;">Level 12 • Pro</span>
+                   <span style="font-size: 10px; font-weight: 700; color: var(--text-muted);">${userStats.xp % 1000}/1000 XP</span>
+                </div>
+                <div style="width: 100%; height: 5px; background: var(--secondary); border-radius: 10px; overflow: hidden;">
+                   <div style="width: ${(userStats.xp % 1000) / 10}%; height: 100%; background: var(--primary); border-radius: 10px; transition: width 0.6s ease;"></div>
+                </div>
+             </div>
+
+             <div class="sidebar-item" onclick="toggleTheme()" style="padding: 12px 18px; border-radius: 12px; background: var(--secondary); margin: 0; display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                   <i data-lucide="${isDarkMode ? 'sun' : 'moon'}" style="width: 18px; height: 18px;"></i>
+                   <span style="font-size: 14px; font-weight: 600;">${isDarkMode ? 'Light Mode' : 'Dark Mode'}</span>
+                </div>
+                <div style="width: 32px; height: 18px; background: ${isDarkMode ? 'var(--primary)' : '#cbd5e1'}; border-radius: 10px; position: relative; transition: all 0.3s ease;">
+                   <div style="position: absolute; top: 3px; left: ${isDarkMode ? '17px' : '3px'}; width: 12px; height: 12px; background: white; border-radius: 50%; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);"></div>
+                </div>
+             </div>
+             
+             <div class="streak-badge" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); margin: 0; position: relative; overflow: hidden;">
+                <div style="position: absolute; right: -10px; top: -10px; font-size: 40px; opacity: 0.15;">🔥</div>
+                <i data-lucide="flame" style="z-index: 1;"></i>
+                <span style="z-index: 1;">${userStats.streak} Day Streak</span>
+             </div>
+
+             <div style="font-size: 12px; color: var(--text-muted); padding: 0 4px; line-height: 1.4; opacity: 0.7;">
+                "Consistency is the key to mastering any language."
+             </div>
+          </div>
         </nav>
       </aside>
 
@@ -117,7 +224,10 @@ function render() {
                ${currentScreen === 'dashboard' ? 'Overview' : currentScreen === 'progress' ? 'My Progress' : modules.find(m => m.id === currentScreen)?.name.replace(/[^a-zA-Z ]/g, "").trim() || 'Module'}
              </div>
              
-             <div style="display: flex; align-items: center; gap: 20px;">
+             <div style="display: flex; align-items: center; gap: 16px;">
+                <div class="theme-toggle" onclick="window.toggleTheme()" title="Toggle Dark Mode">
+                   <i data-lucide="${isDarkMode ? 'sun' : 'moon'}" style="width: 18px; height: 18px;"></i>
+                </div>
                 <div style="width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; background: var(--glass-border); color: var(--text-muted);">
                    <i data-lucide="bell" style="width: 18px; height: 18px;"></i>
                 </div>
@@ -125,7 +235,10 @@ function render() {
                    <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center;">
                      <i data-lucide="user" style="width: 18px; height: 18px;"></i>
                    </div>
-                   <span style="font-size: 14px; font-weight: 700; color: var(--text);">Student</span>
+                   <div style="display: flex; flex-direction: column;">
+                     <span style="font-size: 14px; font-weight: 700; color: var(--text); line-height: 1;">Student</span>
+                     <span style="font-size: 11px; font-weight: 600; color: var(--primary);">${userStats.xp} XP</span>
+                   </div>
                 </div>
              </div>
            </div>
@@ -142,6 +255,15 @@ function render() {
   `
 
   lucide.createIcons()
+
+  // Animate Stats if on dashboard
+  if (currentScreen === 'dashboard') {
+    setTimeout(() => {
+      document.querySelectorAll('.stat-num').forEach(el => {
+        animateValue(el, 0, parseInt(el.dataset.val), 1500);
+      });
+    }, 400);
+  }
 }
 
 function getDashboardHTML() {
@@ -158,9 +280,14 @@ function getDashboardHTML() {
           <div style="z-index: 1; max-width: 60%;">
             <h1 style="font-size: 42px; font-weight: 800; margin-bottom: 12px; line-height: 1.2; letter-spacing: -1px; color: white;">Master Communication Skills 🚀</h1>
             <p style="font-size: 18px; color: rgba(255,255,255,0.9); margin-bottom: 32px; font-weight: 500;">Practice speaking, listening and writing in one place.</p>
-            <button onclick="navigateTo('listening')" style="background: white; color: #3b82f6; border: none; padding: 18px 36px; border-radius: 99px; font-size: 16px; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 12px; box-shadow: 0 10px 24px rgba(0,0,0,0.15); transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);" onmouseover="this.style.transform='translateY(-3px) scale(1.02)'; this.style.boxShadow='0 16px 32px rgba(0,0,0,0.2)';" onmouseout="this.style.transform='translateY(0) scale(1)'; this.style.boxShadow='0 10px 24px rgba(0,0,0,0.15)';">
-               <i data-lucide="play" style="fill: currentColor; width: 22px;"></i> Start Practice
-            </button>
+            <div style="display: flex; align-items: center; gap: 16px;">
+               <button onclick="navigateTo('listening')" style="background: white; color: #3b82f6; border: none; padding: 18px 36px; border-radius: 99px; font-size: 16px; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 12px; box-shadow: 0 10px 24px rgba(0,0,0,0.15); transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);" onmouseover="this.style.transform='translateY(-3px) scale(1.02)'; this.style.boxShadow='0 16px 32px rgba(0,0,0,0.2)';" onmouseout="this.style.transform='translateY(0) scale(1)'; this.style.boxShadow='0 10px 24px rgba(0,0,0,0.15)';">
+                  <i data-lucide="play" style="fill: currentColor; width: 22px;"></i> Start Session
+               </button>
+               <div style="color: rgba(255,255,255,0.8); font-size: 14px; font-style: italic; max-width: 200px; line-height: 1.4;">
+                  "The art of communication is the language of leadership."
+               </div>
+            </div>
           </div>
           
           <div style="z-index: 1; display: flex; align-items: center; justify-content: center; width: 160px; height: 160px; background: rgba(255,255,255,0.15); border: 4px solid rgba(255,255,255,0.25); backdrop-filter: blur(12px); border-radius: 50%; box-shadow: 0 16px 40px rgba(0,0,0,0.15);">
@@ -180,7 +307,7 @@ function getDashboardHTML() {
                <i data-lucide="book-open" style="width: 28px; height: 28px;"></i>
              </div>
              <div style="display: flex; flex-direction: column; justify-content: center;">
-               <div style="font-size: 32px; font-weight: 800; color: var(--text); letter-spacing: -1px; line-height: 1;">14</div>
+               <div class="stat-num" data-val="${userStats.lessons}" style="font-size: 32px; font-weight: 800; color: var(--text); letter-spacing: -1px; line-height: 1;">0</div>
                <div style="font-size: 14px; font-weight: 600; color: var(--text-muted); margin-top: 4px;">Lessons Completed</div>
              </div>
           </div>
@@ -191,7 +318,7 @@ function getDashboardHTML() {
                <i data-lucide="clock" style="width: 28px; height: 28px;"></i>
              </div>
              <div style="display: flex; flex-direction: column; justify-content: center;">
-               <div style="font-size: 32px; font-weight: 800; color: var(--text); letter-spacing: -1px; line-height: 1;">2h 15m</div>
+               <div style="font-size: 32px; font-weight: 800; color: var(--text); letter-spacing: -1px; line-height: 1;">${userStats.time}</div>
                <div style="font-size: 14px; font-weight: 600; color: var(--text-muted); margin-top: 4px;">Practice Time</div>
              </div>
           </div>
@@ -202,7 +329,7 @@ function getDashboardHTML() {
                <i data-lucide="target" style="width: 28px; height: 28px;"></i>
              </div>
              <div style="display: flex; flex-direction: column; justify-content: center;">
-               <div style="font-size: 32px; font-weight: 800; color: var(--text); letter-spacing: -1px; line-height: 1;">850</div>
+               <div class="stat-num" data-val="${userStats.avgScore}" style="font-size: 32px; font-weight: 800; color: var(--text); letter-spacing: -1px; line-height: 1;">0</div>
                <div style="font-size: 14px; font-weight: 600; color: var(--text-muted); margin-top: 4px;">Average Score</div>
              </div>
           </div>
@@ -247,36 +374,48 @@ function getDashboardHTML() {
         
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 32px; align-items: stretch;">
           ${modules.map((m, index) => {
-            let recommendedStyle = index === 1 ? '; transform: scale(1.02);' : '';
+            const dashOffset = 283 - (283 * m.progress) / 100;
             return `
-            <div class="module-card fade-in" style="display: flex; flex-direction: column; align-items: flex-start; text-align: left; animation-delay: ${index * 0.1}s; padding: 32px; border-radius: 28px; box-shadow: 0 16px 40px -10px ${m.color}15; border: 1px solid ${m.color}33; background: linear-gradient(180deg, var(--surface) 0%, ${m.color}08 100%); position: relative; cursor: pointer; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);${recommendedStyle}" onmouseover="if(${index}!==1)this.style.transform='translateY(-6px) scale(1.02)'; this.style.boxShadow='0 24px 50px -12px ${m.color}40'; this.style.borderColor='${m.color}66';" onmouseout="this.style.transform='${index===1?'scale(1.02)':'translateY(0) scale(1)'}'; this.style.boxShadow='0 16px 40px -10px ${m.color}15'; this.style.borderColor='${m.color}33';" onclick="navigateTo('${m.id}')">
-              
-              ${index === 1 ? `<div style="background: ${m.color}; color: white; padding: 6px 14px; border-radius: 12px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; position: absolute; top: -14px; right: 32px; box-shadow: 0 8px 16px ${m.color}66; z-index: 10;">⭐ Recommended</div>` : ''}
-              
-              <div style="display: flex; justify-content: space-between; width: 100%; margin-bottom: 24px;">
-                <div class="icon-container" style="background: ${m.color}1a; color: ${m.color}; width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: inset 0 2px 4px rgba(255,255,255,0.5);">
-                  <i data-lucide="${m.icon}" style="width: 28px; height: 28px;"></i>
-                </div>
-                
-                <div style="position: relative; width: 56px; height: 56px; border-radius: 50%; background: conic-gradient(${m.color} ${m.progress}%, ${m.color}22 0); display: flex; align-items: center; justify-content: center;">
-                   <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--surface); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: ${m.color}; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                      ${m.progress}%
+              <div class="module-card fade-in" onclick="navigateTo('${m.id}')" style="animation-delay: ${index * 0.1}s">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+                   <div style="width: 54px; height: 54px; border-radius: 14px; background: ${m.color}15; color: ${m.color}; display: flex; align-items: center; justify-content: center;">
+                      <i data-lucide="${m.icon}" style="width: 26px; height: 26px;"></i>
+                   </div>
+                   <!-- SVG Progress Ring -->
+                   <div style="position: relative; width: 44px; height: 44px;">
+                      <svg width="44" height="44" viewBox="0 0 100 100" style="transform: rotate(-90deg);">
+                         <circle cx="50" cy="50" r="45" fill="none" stroke="var(--secondary)" stroke-width="10" />
+                         <circle class="progress-ring" cx="50" cy="50" r="45" fill="none" stroke="${m.color}" stroke-width="10" 
+                                 stroke-dasharray="283" stroke-dashoffset="${dashOffset}" stroke-linecap="round" />
+                      </svg>
+                      <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: var(--text);">
+                         ${m.progress}%
+                      </div>
                    </div>
                 </div>
-              </div>
-              
-              <div class="module-info" style="display: flex; flex-direction: column; gap: 8px; width: 100%; height: 100%;">
-                <div class="module-name" style="font-size: 22px; font-weight: 800; color: var(--text); letter-spacing: -0.5px; line-height: 1.2;">${m.name}</div>
-                <div class="module-desc" style="font-size: 15px; color: var(--text-muted); line-height: 1.6; font-weight: 500;">${m.desc}</div>
                 
-                <div style="margin-top: auto; padding-top: 24px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; color: ${m.color}; font-size: 14px; font-weight: 700;">
-                  Start Module <i data-lucide="arrow-right" style="width: 16px;"></i>
+                <h3 style="font-size: 18px; font-weight: 800; color: var(--text); margin-bottom: 8px;">${m.name.split(' ').slice(1).join(' ')}</h3>
+                <p style="font-size: 14px; color: var(--text-muted); line-height: 1.5; margin-bottom: 24px;">${m.desc}</p>
+                
+                <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: ${m.color};">
+                   Start Practice <i data-lucide="chevron-right" style="width: 16px;"></i>
                 </div>
               </div>
-            </div>
-          `}).join('')}
+            `
+          }).join('')}
         </div>
       </section>
+      
+      <!-- Toast Notification Container -->
+      <div id="toast-container" class="toast">
+         <div id="toast-icon-bg" style="width: 32px; height: 32px; border-radius: 8px; background: rgba(34, 197, 94, 0.1); color: #22c55e; display: flex; align-items: center; justify-content: center;">
+            <i id="toast-icon" data-lucide="check" style="width: 18px; height: 18px;"></i>
+         </div>
+         <div style="display: flex; flex-direction: column;">
+            <span id="toast-title" style="font-size: 14px; font-weight: 800; color: var(--text);">Success!</span>
+            <span id="toast-msg" style="font-size: 12px; color: var(--text-muted);">Action completed successfully.</span>
+         </div>
+      </div>
     </div>
   `
 }
@@ -468,6 +607,32 @@ function getModuleHTML(id) {
                 <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--primary); margin-bottom: 8px; letter-spacing: 1px;">Live Transcript</div>
                 <span id="extempore-text" style="color: var(--text-muted);"></span><span id="extempore-interim" style="color: var(--text);"></span>
              </div>
+
+             ${speakingFeedback ? `
+               <div class="feedback-card" style="width: 100%; text-align: left;">
+                  <div style="font-size: 18px; font-weight: 800; margin-bottom: 8px; display: flex; align-items: center; gap: 10px;">
+                     <i data-lucide="sparkles" style="color: #818cf8; width: 22px;"></i> AI Performance Analysis
+                  </div>
+                  <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 16px;">${speakingFeedback.summary}</p>
+                  <div class="feedback-grid">
+                     <div class="feedback-stat">
+                        <span class="value">${speakingFeedback.clarity}%</span>
+                        <span class="label">Clarity</span>
+                     </div>
+                     <div class="feedback-stat">
+                        <span class="value">${speakingFeedback.grammar}%</span>
+                        <span class="label">Grammar</span>
+                     </div>
+                     <div class="feedback-stat">
+                        <span class="value">${speakingFeedback.pace}%</span>
+                        <span class="label">Pace</span>
+                     </div>
+                  </div>
+                  <div style="margin-top: 20px; padding: 16px; background: rgba(129, 140, 248, 0.1); border-radius: 12px; font-size: 14px; border-left: 4px solid #818cf8;">
+                     <strong style="color: #4f46e5;">Expert Tip:</strong> ${speakingFeedback.tip}
+                  </div>
+               </div>
+             ` : ''}
           </div>
         </div>
         
@@ -524,9 +689,21 @@ function getModuleHTML(id) {
           
           <div id="dialogue-msg" style="width: 100%; display: none; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2); padding: 12px; border-radius: 12px; color: #4ade80; font-size: 14px; text-align: center;">✅ Dialogue permanently saved to browser!</div>
           
-          <button class="btn btn-primary" onclick="window.saveDialogue()" style="width: 100%; background: linear-gradient(135deg, #0891b2, #06b6d4); font-size: 16px; gap: 8px;">
-            <i data-lucide="save" style="width: 18px; height: 18px;"></i> Save Progress
-          </button>
+          <div style="display: flex; gap: 12px; width: 100%;">
+            <button class="btn btn-outline" style="flex: 1; border-radius: 16px;" onclick="window.analyzeDialogue()">
+              <i data-lucide="brain-circuit" style="width: 18px; height: 18px;"></i> AI Analyze
+            </button>
+            <button class="btn btn-primary" onclick="window.saveDialogue()" style="flex: 2; border-radius: 16px; background: linear-gradient(135deg, #0891b2, #06b6d4); font-size: 16px; gap: 8px;">
+              <i data-lucide="save" style="width: 18px; height: 18px;"></i> Save Progress
+            </button>
+          </div>
+
+          ${dialogueFeedback ? `
+            <div class="feedback-card" style="width: 100%; border-color: rgba(6, 182, 212, 0.3);">
+               <div style="font-size: 16px; font-weight: 800; margin-bottom: 12px; color: #0891b2;">AI Writing Feedback</div>
+               <p style="font-size: 14px; line-height: 1.6; font-style: italic;">"${dialogueFeedback}"</p>
+            </div>
+          ` : ''}
         </div>
       `
     case 'discussion':
@@ -638,6 +815,15 @@ function getModuleHTML(id) {
 
 window.navigateTo = (screen) => {
   currentScreen = screen
+  speakingFeedback = null // Reset feedback when switching screens
+  dialogueFeedback = null
+  render()
+}
+
+window.toggleTheme = () => {
+  isDarkMode = !isDarkMode
+  localStorage.setItem('langLab_theme', isDarkMode ? 'dark' : 'light')
+  document.body.classList.toggle('dark-theme')
   render()
 }
 
@@ -658,6 +844,7 @@ window.submitListening = () => {
   })
   
   listeningScore = score
+  addXP(score * 20 + 10) // Reward for completion
   render()
 }
 
@@ -809,6 +996,30 @@ window.toggleExtemporeRecording = () => {
     glow1.style.display = "none";
     glow2.style.display = "none";
     icon.setAttribute('data-lucide', 'check');
+    
+    // Generate AI Feedback
+    speakingFeedback = {
+      summary: "Excellent delivery! Your use of connectors like 'furthermore' and 'on the other hand' shows a high level of proficiency.",
+      clarity: 92,
+      grammar: 85,
+      pace: 88,
+      tip: "Try to vary your intonation slightly more when transitioning between key points to sound more naturally engaging."
+    };
+    
+    addXP(50);
     lucide.createIcons();
+    render();
   }
+}
+
+window.analyzeDialogue = () => {
+  const text = document.getElementById('dialogue-input').value;
+  if (!text.trim()) {
+    alert("Please write something first!");
+    return;
+  }
+  
+  dialogueFeedback = "Your dialogue shows a good understanding of formal address. The flow is natural, though you could use more descriptive verbs to indicate the teacher's tone.";
+  addXP(30);
+  render();
 }
